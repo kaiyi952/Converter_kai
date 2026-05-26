@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Word to HTML Converter</title>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+        }
+
+        .toolbar {
+            margin-bottom: 12px;
+        }
+
+        .toolbar button {
+            margin-right: 8px;
+            padding: 6px 14px;
+        }
+
+        #paste {
+            min-height: 200px;
+            max-height: 400px;
+            overflow: auto;
+            border: 1px solid #999;
+            padding: 10px;
+            background: #fff;
+            margin-bottom: 16px;
+        }
+
+        #paste:empty::before {
+            content: 'Paste content from Word / Outlook / Google Docs here (Ctrl + V)...';
+            color: #999;
+        }
+
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 500px;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+        }
+
+        .box {
+            flex: 1;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Word to HTML Converter</h2>
+
+    <div id="paste" contenteditable="true"></div>
+
+    <div class="toolbar">
+        <button onclick="convert()">Convert</button>
+        <button onclick="clearPaste()">Clear</button>
+    </div>
+
+    <div class="container">
+        <div class="box">
+            <h3>Output HTML</h3>
+            <textarea id="output"></textarea>
+        </div>
+
+        <div class="box">
+            <h3>Preview</h3>
+            <iframe id="preview" style="width:100%; height:500px;"></iframe>
+        </div>
+    </div>
+
+    <script>
+        const pasteArea = document.getElementById('paste');
+        let pastedHtml = '';
+
+        pasteArea.addEventListener('paste', (event) => {
+            event.preventDefault();
+            const clipboard = event.clipboardData || window.clipboardData;
+            const htmlFromClipboard = clipboard.getData('text/html');
+            const textFromClipboard = clipboard.getData('text/plain');
+
+            if (htmlFromClipboard) {
+                pastedHtml = htmlFromClipboard;
+                pasteArea.innerHTML = htmlFromClipboard;
+            } else {
+                pastedHtml = textFromClipboard;
+                pasteArea.textContent = textFromClipboard;
+            }
+        });
+
+        pasteArea.addEventListener('input', () => {
+            pastedHtml = pasteArea.innerHTML;
+        });
+
+        function clearPaste() {
+            pasteArea.innerHTML = '';
+            pastedHtml = '';
+            document.getElementById('output').value = '';
+            document.getElementById('preview').srcdoc = '';
+        }
+
+        async function convert() {
+            const htmlPayload = pastedHtml || pasteArea.innerHTML;
+
+            if (!htmlPayload || !htmlPayload.trim()) {
+                alert('Please paste content first.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/convert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ html: htmlPayload })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    alert('Conversion failed: ' + (data.error || res.statusText));
+                    return;
+                }
+
+                document.getElementById('output').value = data.html;
+                document.getElementById('preview').srcdoc = data.html;
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+            }
+        }
+    </script>
+
+</body>
+
+</html>
