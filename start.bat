@@ -12,6 +12,6 @@ REM Give the server a moment to bind to the port.
 timeout /t 1 /nobreak >nul
 
 REM Launch Chrome in app mode (no address bar, no tabs - looks like a desktop app).
-start chrome --app=http://localhost:3000
+start chrome http://localhost:3000
 
 endlocal
