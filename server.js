@@ -41,6 +41,46 @@ const ANCHOR_TAG_PATTERN = /<a\s+([^>]*?)>([\s\S]*?)<\/a>/gi;
 const HREF_ATTRIBUTE_PATTERN = /\bhref\s*=\s*("[^"]*"|'[^']*'|\S+)/i;
 const URL_LIKE_PLAIN_TEXT_PATTERN = /^(?:https?:\/\/|www\.|mailto:|tel:)\S+$/i;
 const HTML_TAG_PATTERN = /<[^>]+>/g;
+const TRAILING_URL_PUNCTUATION_PATTERN = /[.,;:!?)}\]'"]+$/;
+
+function unquoteAttributeValue(value) {
+    const trimmed = value.trim();
+    if (
+        (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+        (trimmed.startsWith("'") && trimmed.endsWith("'"))
+    ) {
+        return trimmed.slice(1, -1);
+    }
+    return trimmed;
+}
+
+function stripTrailingUrlPunctuation(url) {
+    if (!url) {
+        return url;
+    }
+
+    let cleaned = url;
+    let previous;
+
+    do {
+        previous = cleaned;
+        cleaned = cleaned.replace(TRAILING_URL_PUNCTUATION_PATTERN, '');
+
+        const openParens = (cleaned.match(/\(/g) || []).length;
+        const closeParens = (cleaned.match(/\)/g) || []).length;
+        if (closeParens > openParens) {
+            cleaned = cleaned.replace(/\)+$/, '');
+        }
+
+        const openBrackets = (cleaned.match(/\[/g) || []).length;
+        const closeBrackets = (cleaned.match(/\]/g) || []).length;
+        if (closeBrackets > openBrackets) {
+            cleaned = cleaned.replace(/\]+$/, '');
+        }
+    } while (cleaned !== previous);
+
+    return cleaned;
+}
 
 function detectMsoListLevel(attribs) {
     const className = attribs.class || '';
@@ -126,13 +166,25 @@ function applyTableTemplate(html) {
 function alignAnchorHrefToText(html) {
     return html.replace(ANCHOR_TAG_PATTERN, (fullMatch, attrs, innerContent) => {
         const plainText = innerContent.replace(HTML_TAG_PATTERN, '').replace(/\s+/g, ' ').trim();
+        const urlFromText = stripTrailingUrlPunctuation(plainText);
 
-        if (!URL_LIKE_PLAIN_TEXT_PATTERN.test(plainText)) {
+        const hrefMatch = attrs.match(HREF_ATTRIBUTE_PATTERN);
+        const originalHref = hrefMatch ? unquoteAttributeValue(hrefMatch[1]) : '';
+        let href = stripTrailingUrlPunctuation(originalHref);
+
+        if (URL_LIKE_PLAIN_TEXT_PATTERN.test(urlFromText)) {
+            href = urlFromText.startsWith('www.') ? `http://${urlFromText}` : urlFromText;
+        }
+
+        if (!href && !hrefMatch) {
             return fullMatch;
         }
 
-        const normalizedHref = plainText.startsWith('www.') ? `http://${plainText}` : plainText;
-        const safeHref = normalizedHref.replace(/"/g, '&quot;');
+        if (href === originalHref && !URL_LIKE_PLAIN_TEXT_PATTERN.test(urlFromText)) {
+            return fullMatch;
+        }
+
+        const safeHref = href.replace(/"/g, '&quot;');
         const attrsWithoutHref = attrs.replace(HREF_ATTRIBUTE_PATTERN, '').trim();
         const restAttrs = attrsWithoutHref ? ` ${attrsWithoutHref}` : '';
 
